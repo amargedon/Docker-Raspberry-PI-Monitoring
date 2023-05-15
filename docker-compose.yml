@@ -4,13 +4,13 @@ name: monitoring
 
 services:
   grafana:
-    container_name: grafana
+    container_name: Grafana
     image: grafana/grafana:9.5.1
-    hostname: rpi-grafana
+    hostname: grafana
     restart: unless-stopped
     user: "472"
     networks:
-      - internal
+      - monitoring
     ports:
       - "3000:3000"
     env_file:
@@ -23,9 +23,9 @@ services:
       - prometheus
 
   cadvisor:
-    container_name: cadvisor
+    container_name: CAdvisor
     image: gcr.io/cadvisor/cadvisor:v0.47.1
-    hostname: rpi-cadvisor
+    hostname: cadvisor
     restart: unless-stopped
     privileged: true
     command:
@@ -33,7 +33,7 @@ services:
       - "--housekeeping_interval=30s"
       - "--disable_metrics=advtcp,app,cpuLoad,cpu_topology,cpuset,disk,hugetlb,memory_numa,oom_event,percpu,perf_event,process,referenced_memory,resctrl,sched,tcp,udp"
     networks:
-      - internal
+      - monitoring
     expose:
       - 8080
     devices:
@@ -47,12 +47,12 @@ services:
       - /etc/machine-id:/etc/machine-id:ro
 
   node-exporter:
-    container_name: node-exporter
+    container_name: Node-exporter
     image: prom/node-exporter-linux-arm64:v1.5.0
-    hostname: rpi-exporter
+    hostname: exporter
     restart: unless-stopped
     networks:
-      - internal
+      - monitoring
     expose:
       - 9100
     command:
@@ -68,16 +68,17 @@ services:
       - /:/host:ro,rslave
 
   prometheus:
-    container_name: prometheus
+    container_name: Prometheus
     image: prom/prometheus-linux-arm64:v2.43.1
-    hostname: rpi-prometheus
+    hostname: prometheus
     restart: unless-stopped
     user: "nobody"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
     networks:
-      - internal
+      - monitoring
     expose:
       - 9090
     volumes:
@@ -91,12 +92,31 @@ services:
       - cadvisor:cadvisor
       - node-exporter:node-exporter
 
+  alertmanager:
+    container_name: Alertmanager
+    image: prom/alertmanager:v0.25.0
+    hostname: alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093/'
+    networks:
+      - monitoring
+    expose:
+      - 9093
+    volumes:
+      - monitoring_Alertmanager:/alertmanager
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+
 networks:
-  internal:
+  monitoring:
     driver: bridge
 
 volumes:
   monitoring_Grafana:
     external: true
   monitoring_Prometheus:
+    external: true
+  monitoring_Alertmanager:
     external: true
